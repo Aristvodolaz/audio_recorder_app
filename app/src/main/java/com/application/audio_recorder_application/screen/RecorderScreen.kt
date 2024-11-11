@@ -39,30 +39,41 @@ import android.Manifest
 import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.Text
+import androidx.compose.foundation.layout.Row
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.core.content.ContextCompat
+import kotlinx.coroutines.launch
 
 @Composable
 fun RecorderScreen(viewModel: AudioViewModel = hiltViewModel()) {
     val isRecording by viewModel.isRecording.collectAsState()
+    val isPaused by viewModel.isPaused.collectAsState()
     val context = LocalContext.current
-    var seconds by remember { mutableStateOf(0) } // Отсчет времени в секундах
+    var seconds by remember { mutableStateOf(0) }
     val amplitude by viewModel.amplitude.collectAsState()
 
-    // Лаунчер для запроса разрешения
     val permissionGranted = remember { mutableStateOf(false) }
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission(),
-        onResult = { isGranted ->
-            permissionGranted.value = isGranted
-        }
+        onResult = { isGranted -> permissionGranted.value = isGranted }
     )
+    val snackbarHostState = remember { SnackbarHostState() }
+    val coroutineScope = rememberCoroutineScope()
 
-    // Проверяем разрешение при запуске
+    // Запуск показа Snackbar при завершении записи
+    LaunchedEffect(Unit) {
+        viewModel.showSnackbar.collect { show ->
+            if (show) {
+                coroutineScope.launch {
+                    snackbarHostState.showSnackbar("Файл успешно записан")
+                }
+            }
+        }
+    }
     LaunchedEffect(Unit) {
         permissionGranted.value = ContextCompat.checkSelfPermission(
             context,
@@ -70,12 +81,11 @@ fun RecorderScreen(viewModel: AudioViewModel = hiltViewModel()) {
         ) == PackageManager.PERMISSION_GRANTED
     }
 
-    // Запускаем таймер, когда запись активна
     LaunchedEffect(isRecording) {
-        if (isRecording) {
-            seconds = 0 // Сбрасываем таймер при начале записи
-            while (isRecording) {
-                delay(1000L) // Задержка 1 секунда
+        if (isRecording && !isPaused) {
+            seconds = 0
+            while (isRecording && !isPaused) {
+                delay(1000L)
                 seconds++
             }
         }
@@ -88,7 +98,8 @@ fun RecorderScreen(viewModel: AudioViewModel = hiltViewModel()) {
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        // Отображаем таймер записи
+        SnackbarHost(hostState = snackbarHostState) // Для показа Snackbar
+
         Text(
             text = formatTime(seconds),
             fontSize = 36.sp,
@@ -98,36 +109,65 @@ fun RecorderScreen(viewModel: AudioViewModel = hiltViewModel()) {
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Кнопка записи с иконкой микрофона
-        IconButton(
-            onClick = {
-                // Проверяем, есть ли разрешение перед началом записи
-                if (!permissionGranted.value) {
-                    permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
-                } else {
-                    if (isRecording) {
-                        viewModel.stopRecording()
+        Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+            IconButton(
+                onClick = {
+                    if (!permissionGranted.value) {
+                        permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
                     } else {
-                        val filePath = "${context.filesDir.absolutePath}/recording_${System.currentTimeMillis()}.3gp"
-                        viewModel.startRecording(filePath)
+                        if (isRecording) {
+                            if (isPaused) {
+                                viewModel.resumeRecording()
+                            } else {
+                                viewModel.pauseRecording()
+                            }
+                        } else {
+                            val filePath = "${context.filesDir.absolutePath}/recording_${System.currentTimeMillis()}.3gp"
+                            viewModel.startRecording(filePath)
+                        }
                     }
-                }
-            },
-            modifier = Modifier
-                .size(100.dp)
-                .background(if (isRecording) Color.Gray else Color.Red, shape = CircleShape)
-        ) {
-            Icon(
-                imageVector = Icons.Filled.Mic,
-                contentDescription = "Record",
-                tint = Color.White,
-                modifier = Modifier.size(50.dp)
-            )
+                },
+                modifier = Modifier
+                    .size(100.dp)
+                    .background(
+                        color = when {
+                            isRecording && isPaused -> Color.Yellow
+                            isRecording -> Color.Gray
+                            else -> Color.Red
+                        },
+                        shape = CircleShape
+                    )
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.Mic,
+                    contentDescription = "Record",
+                    tint = Color.White,
+                    modifier = Modifier.size(50.dp)
+                )
+            }
+
+            IconButton(
+                onClick = {
+                    if (isRecording) {
+                        viewModel.completeRecording()
+                    }
+                },
+                enabled = isRecording,
+                modifier = Modifier
+                    .size(100.dp)
+                    .background(Color.Blue, shape = CircleShape)
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.Check, // Icon for complete
+                    contentDescription = "Complete",
+                    tint = Color.White,
+                    modifier = Modifier.size(50.dp)
+                )
+            }
         }
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Информация о записи
         Text(
             text = "AAC (m4a) 16 kHz 128 kbps Mono",
             fontSize = 16.sp,
@@ -136,7 +176,6 @@ fun RecorderScreen(viewModel: AudioViewModel = hiltViewModel()) {
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Визуализация звуковой волны
         SoundWaveVisualizer(isRecording = isRecording, amplitude = amplitude)
     }
 }

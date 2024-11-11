@@ -14,6 +14,9 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import java.io.File
 import javax.inject.Inject
+import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
 
 @HiltViewModel
 class AudioViewModel @Inject constructor(private val repository: AudioRecorderRepository) : ViewModel() {
@@ -24,29 +27,33 @@ class AudioViewModel @Inject constructor(private val repository: AudioRecorderRe
     private val _isRecording = MutableStateFlow(false)
     val isRecording: StateFlow<Boolean> get() = _isRecording
 
+    private val _isPaused = MutableStateFlow(false)
+    val isPaused: StateFlow<Boolean> get() = _isPaused
+
     private val _amplitude = MutableStateFlow(0)
     val amplitude = _amplitude.asStateFlow()
 
+    // SharedFlow для управления уведомлением о завершении записи
+    private val _showSnackbar = MutableSharedFlow<Boolean>()
+    val showSnackbar: SharedFlow<Boolean> = _showSnackbar.asSharedFlow()
+
     private var audioRecord: AudioRecord? = null
-    private val sampleRate = 16000 // Частота дискретизации
+    private var outputFilePath: String? = null
+    private val sampleRate = 16000
 
     init {
         loadRecordings()
     }
 
-    /**
-     * Загружает список записей из репозитория
-     */
     fun loadRecordings() {
         _recordingsList.value = repository.getRecordingsList()
     }
 
-    /**
-     * Начинает запись в указанный файл
-     */
-    fun startRecording(outputFilePath: String) {
-        repository.startRecording(outputFilePath)
+    fun startRecording(filePath: String) {
+        outputFilePath = filePath
+        repository.startRecording(filePath)
         _isRecording.value = true
+        _isPaused.value = false
 
         audioRecord = AudioRecord(
             MediaRecorder.AudioSource.MIC,
@@ -60,44 +67,46 @@ class AudioViewModel @Inject constructor(private val repository: AudioRecorderRe
         updateAmplitude()
     }
 
-    /**
-     * Обновляет амплитуду во время записи
-     */
     private fun updateAmplitude() {
         viewModelScope.launch {
             val buffer = ShortArray(1024)
-            while (_isRecording.value && audioRecord != null && audioRecord!!.recordingState == AudioRecord.RECORDSTATE_RECORDING) {
+            while (_isRecording.value && !_isPaused.value && audioRecord?.recordingState == AudioRecord.RECORDSTATE_RECORDING) {
                 val readSize = audioRecord!!.read(buffer, 0, buffer.size)
                 if (readSize > 0) {
                     val maxAmplitude = buffer.maxOrNull()?.toInt() ?: 0
                     _amplitude.value = maxAmplitude
                 }
-                delay(50) // Обновляем амплитуду каждые 50 мс
+                delay(50)
             }
         }
     }
 
-    /**
-     * Останавливает запись
-     */
-    fun stopRecording() {
-        repository.stopRecording()
-        _isRecording.value = false
-        audioRecord?.stop()
-        audioRecord?.release()
-        audioRecord = null
-        loadRecordings() // Обновляем список после завершения записи
-    }
-
-    // Остальные функции для паузы, воспроизведения и удаления записей
     fun pauseRecording() {
-        repository.pauseRecording()
-        _isRecording.value = false
+        _isPaused.value = true
+        audioRecord?.stop()
     }
 
     fun resumeRecording() {
-        repository.resumeRecording()
-        _isRecording.value = true
+        if (_isPaused.value) {
+            _isPaused.value = false
+            audioRecord?.startRecording()
+            updateAmplitude()
+        }
+    }
+
+    fun completeRecording() {
+        _isRecording.value = false
+        _isPaused.value = false
+        audioRecord?.stop()
+        audioRecord?.release()
+        audioRecord = null
+        repository.stopRecording()
+        loadRecordings() // Обновляем список после завершения записи
+
+        // Уведомление об успешной записи
+        viewModelScope.launch {
+            _showSnackbar.emit(true) // Показываем Snackbar
+        }
     }
 
     fun playRecording(file: File) {
@@ -106,7 +115,7 @@ class AudioViewModel @Inject constructor(private val repository: AudioRecorderRe
 
     fun deleteRecording(file: File) {
         if (repository.deleteRecording(file)) {
-            loadRecordings()
+            loadRecordings() // Обновляем список после удаления записи
         }
     }
 }

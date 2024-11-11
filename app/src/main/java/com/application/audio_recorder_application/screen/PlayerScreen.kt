@@ -1,4 +1,5 @@
 package com.application.audio_recorder_application.screen
+import android.media.MediaMetadataRetriever
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -11,6 +12,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -72,8 +74,24 @@ fun PlayerScreen(viewModel: AudioViewModel = hiltViewModel()) {
     }
 }
 
+fun getRecordingDuration(file: File): String {
+    val retriever = MediaMetadataRetriever()
+    retriever.setDataSource(file.absolutePath)
+    val durationMs = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull() ?: 0L
+    retriever.release()
+
+    val hours = (durationMs / 1000) / 3600
+    val minutes = ((durationMs / 1000) % 3600) / 60
+    val seconds = (durationMs / 1000) % 60
+
+    return String.format("%02d:%02d:%02d", hours, minutes, seconds)
+}
+
 @Composable
 fun RecordingItem(recording: File, onPlayClick: () -> Unit, onDeleteClick: () -> Unit) {
+    val duration = remember { getRecordingDuration(recording) }
+    val fileSizeKb = (recording.length() / 1024).toInt()
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -83,7 +101,7 @@ fun RecordingItem(recording: File, onPlayClick: () -> Unit, onDeleteClick: () ->
     ) {
         Column {
             Text(text = recording.name, fontWeight = FontWeight.Bold)
-            Text(text = "Duration: 3:24 | Size: ${(recording.length() / 1024)} KB", color = Color.Gray)
+            Text(text = "Duration: $duration | Size: $fileSizeKb KB", color = Color.Gray)
         }
         Row {
             IconButton(onClick = onPlayClick) {
