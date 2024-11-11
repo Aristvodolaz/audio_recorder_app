@@ -1,108 +1,112 @@
 package com.application.audio_recorder_application.viewmodel
 
-import AudioRecorderRepository
-import android.os.Build
+import android.media.AudioFormat
+import android.media.AudioRecord
+import android.media.MediaRecorder
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.application.audio_recorder_application.util.SpeechRecognitionHelper
+import com.application.audio_recorder_application.data.AudioRecorderRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import java.io.File
 import javax.inject.Inject
 
 @HiltViewModel
-class AudioViewModel @Inject constructor(
-    private val speechRecognitionHelper: SpeechRecognitionHelper,
-    private val audioRecorderRepository: AudioRecorderRepository
-) : ViewModel() {
-
-    private val _transcriptionResult = MutableStateFlow("Waiting for transcription...")
-    val transcriptionResult: StateFlow<String> get() = _transcriptionResult
-
-    private val _isRecording = audioRecorderRepository.isRecordingFlow
-    val isRecording: StateFlow<Boolean> get() = _isRecording
+class AudioViewModel @Inject constructor(private val repository: AudioRecorderRepository) : ViewModel() {
 
     private val _recordingsList = MutableStateFlow<List<File>>(emptyList())
     val recordingsList: StateFlow<List<File>> get() = _recordingsList
 
-    private val _volumeLevel = MutableStateFlow(0.5f)
-    val volumeLevel: StateFlow<Float> get() = _volumeLevel
+    private val _isRecording = MutableStateFlow(false)
+    val isRecording: StateFlow<Boolean> get() = _isRecording
 
-    val isPaused = MutableStateFlow(false)
+    private val _amplitude = MutableStateFlow(0)
+    val amplitude = _amplitude.asStateFlow()
 
-    fun updateVolumeLevel(volume: Float) {
-        _volumeLevel.value = volume
+    private var audioRecord: AudioRecord? = null
+    private val sampleRate = 16000 // Частота дискретизации
+
+    init {
+        loadRecordings()
     }
 
-    fun togglePauseResume() {
-        if (isPaused.value) {
-            audioRecorderRepository.resumeRecording()
-        } else {
-            audioRecorderRepository.pauseRecording()
-        }
-        isPaused.value = !isPaused.value
-    }
-
+    /**
+     * Загружает список записей из репозитория
+     */
     fun loadRecordings() {
-        viewModelScope.launch {
-            _recordingsList.value = audioRecorderRepository.getRecordingsList()
-        }
+        _recordingsList.value = repository.getRecordingsList()
     }
 
-    fun startRecording() {
+    /**
+     * Начинает запись в указанный файл
+     */
+    fun startRecording(outputFilePath: String) {
+        repository.startRecording(outputFilePath)
+        _isRecording.value = true
+
+        audioRecord = AudioRecord(
+            MediaRecorder.AudioSource.MIC,
+            sampleRate,
+            AudioFormat.CHANNEL_IN_MONO,
+            AudioFormat.ENCODING_PCM_16BIT,
+            AudioRecord.getMinBufferSize(sampleRate, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)
+        )
+
+        audioRecord?.startRecording()
+        updateAmplitude()
+    }
+
+    /**
+     * Обновляет амплитуду во время записи
+     */
+    private fun updateAmplitude() {
         viewModelScope.launch {
-            try {
-                audioRecorderRepository.startRecording("recorded_audio")
-                _transcriptionResult.value = "Recording started..."
-            } catch (e: Exception) {
-                _transcriptionResult.value = "Recording failed: ${e.message}"
+            val buffer = ShortArray(1024)
+            while (_isRecording.value && audioRecord != null && audioRecord!!.recordingState == AudioRecord.RECORDSTATE_RECORDING) {
+                val readSize = audioRecord!!.read(buffer, 0, buffer.size)
+                if (readSize > 0) {
+                    val maxAmplitude = buffer.maxOrNull()?.toInt() ?: 0
+                    _amplitude.value = maxAmplitude
+                }
+                delay(50) // Обновляем амплитуду каждые 50 мс
             }
         }
     }
 
+    /**
+     * Останавливает запись
+     */
     fun stopRecording() {
-        viewModelScope.launch {
-            try {
-                audioRecorderRepository.stopRecording()
-                _transcriptionResult.value = "Recording stopped."
-            } catch (e: Exception) {
-                _transcriptionResult.value = "Failed to stop recording: ${e.message}"
-            }
-        }
+        repository.stopRecording()
+        _isRecording.value = false
+        audioRecord?.stop()
+        audioRecord?.release()
+        audioRecord = null
+        loadRecordings() // Обновляем список после завершения записи
     }
 
-    fun startTranscription(language: String) {
-        viewModelScope.launch {
-            try {
-                speechRecognitionHelper.startListening(language)
-                _transcriptionResult.value = "Listening for transcription..."
-            } catch (e: Exception) {
-                _transcriptionResult.value = "Transcription failed: ${e.message}"
-            }
-        }
+    // Остальные функции для паузы, воспроизведения и удаления записей
+    fun pauseRecording() {
+        repository.pauseRecording()
+        _isRecording.value = false
+    }
+
+    fun resumeRecording() {
+        repository.resumeRecording()
+        _isRecording.value = true
     }
 
     fun playRecording(file: File) {
-        audioRecorderRepository.playRecording(file)
+        repository.playRecording(file)
     }
 
-    fun stopTranscription() {
-        try {
-            speechRecognitionHelper.stopListening()
-            _transcriptionResult.value = "Transcription stopped."
-        } catch (e: Exception) {
-            _transcriptionResult.value = "Failed to stop transcription: ${e.message}"
+    fun deleteRecording(file: File) {
+        if (repository.deleteRecording(file)) {
+            loadRecordings()
         }
-    }
-
-    fun updateTranscriptionResult(message: String) {
-        _transcriptionResult.value = message
-    }
-
-    override fun onCleared() {
-        super.onCleared()
-        speechRecognitionHelper.release()
     }
 }

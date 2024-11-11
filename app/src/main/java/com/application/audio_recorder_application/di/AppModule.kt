@@ -15,13 +15,17 @@ object AppModule {
 
     @Provides
     @Singleton
-    fun provideSpeechRecognitionHelper(@ApplicationContext context: Context): SpeechRecognitionHelper {
-        return SpeechRecognitionHelper(context)
+    fun provideAudioRecorderRepository(
+        @ApplicationContext context: Context
+    ): AudioRecorderRepository {
+        return AudioRecorderRepository(context)
     }
 
     @Provides
     @Singleton
-    fun provideAudioRecorderRepository(@ApplicationContext context: Context): AudioRecorderRepository {
-        return AudioRecorderRepository(context)
+    fun provideSpeechRecognitionHelper(
+        @ApplicationContext context: Context
+    ): SpeechRecognitionHelper {
+        return SpeechRecognitionHelper(context)
     }
 }
