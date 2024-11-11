@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "3935241019",
+    "project_id": "gorkunova-1b4db",
+    "storage_bucket": "gorkunova-1b4db.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:3935241019:android:9aa678db7f511fda882d1e",
+        "android_client_info": {
+          "package_name": "com.application.audio_recorder_application"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDY1Epju40JbdDVBJT4mOjQgw5fsOdMZnM"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
