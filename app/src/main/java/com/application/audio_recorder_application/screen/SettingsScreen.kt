@@ -1,65 +1,191 @@
 package com.application.audio_recorder_application.screen
+
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.SkipNext
-import androidx.compose.material.icons.filled.SkipPrevious
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.Slider
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.application.audio_recorder_application.data.SettingsRepository
+import com.application.audio_recorder_application.viewmodel.SettingsViewModel
+import androidx.hilt.navigation.compose.hiltViewModel
+
 @Composable
-fun SettingsScreen() {
+fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
+    val audioSource by viewModel.audioSource.collectAsState()
+    val recordingFormat by viewModel.recordingFormat.collectAsState()
+    val sampleRate by viewModel.sampleRate.collectAsState()
+    val bitrate by viewModel.bitrate.collectAsState()
+    val recordingsFolder by viewModel.recordingsFolder.collectAsState()
+    val language by viewModel.language.collectAsState()
+
     Column(
         modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp)
+            .fillMaxSize(),
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Text(text = "Settings", fontSize = 24.sp, fontWeight = FontWeight.Bold)
+        Row(
+            modifier = Modifier
+            .fillMaxWidth()
+            .background(Color.Red)
+            .height(56.dp),
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "Settings",
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color.White,
+                textAlign = TextAlign.Center
+            )
+        }
 
-        Spacer(modifier = Modifier.height(16.dp))
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            // Настройки с выпадающими списками
+            DropdownSettingsItem(
+                title = "Audio source",
+                selectedValue = audioSource,
+                options = listOf("Default", "Microphone", "Camcorder"),
+                onSave = { viewModel.saveSetting(SettingsRepository.AUDIO_SOURCE_KEY, it) }
+            )
 
-        // Настройка источника аудио
-        SettingsItem(title = "Audio source", description = "Default")
-        SettingsItem(title = "Recording format", description = "AAC (m4a) - Good quality")
-        SettingsItem(title = "Sample rate", description = "16 kHz - Medium quality")
-        SettingsItem(title = "Encoder bitrate", description = "128 kbps")
-        SettingsItem(title = "Recordings folder", description = "/storage/emulated/0/VoiceRecorder")
-        SettingsItem(title = "Language", description = "Default")
+            DropdownSettingsItem(
+                title = "Recording format",
+                selectedValue = recordingFormat,
+                options = listOf("AAC (m4a)", "WAV", "MP3"),
+                onSave = { viewModel.saveSetting(SettingsRepository.RECORDING_FORMAT_KEY, it) }
+            )
+
+            DropdownSettingsItem(
+                title = "Sample rate",
+                selectedValue = sampleRate,
+                options = listOf("8 kHz", "16 kHz", "44.1 kHz"),
+                onSave = { viewModel.saveSetting(SettingsRepository.SAMPLE_RATE_KEY, it) }
+            )
+
+            DropdownSettingsItem(
+                title = "Encoder bitrate",
+                selectedValue = bitrate,
+                options = listOf("64 kbps", "128 kbps", "256 kbps"),
+                onSave = { viewModel.saveSetting(SettingsRepository.BITRATE_KEY, it) }
+            )
+
+            SettingsItem(
+                title = "Recordings folder",
+                value = recordingsFolder,
+                onSave = { viewModel.saveSetting(SettingsRepository.RECORDINGS_FOLDER_KEY, it) }
+            )
+        }
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SettingsItem(title: String, description: String) {
+fun DropdownSettingsItem(
+    title: String,
+    selectedValue: String,
+    options: List<String>,
+    onSave: (String) -> Unit
+) {
+    var expanded by remember { mutableStateOf(false) }
+    var currentValue by remember { mutableStateOf(selectedValue) }
+
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 8.dp)
+            .padding(vertical = 12.dp)
     ) {
-        Text(text = title, fontWeight = FontWeight.Bold)
-        Text(text = description, color = Color.Gray)
+        Text(text = title, fontSize = 14.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 8.dp))
+
+        ExposedDropdownMenuBox(
+            expanded = expanded,
+            onExpandedChange = { expanded = !expanded }
+        ) {
+            OutlinedTextField(
+                value = currentValue,
+                onValueChange = { },
+                readOnly = true,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .menuAnchor(), // This attaches the dropdown to the TextField
+                trailingIcon = {
+                    ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded)
+                },
+                label = { Text("Select $title") },
+                shape = RoundedCornerShape(12.dp),
+                colors = TextFieldDefaults.outlinedTextFieldColors(
+                    focusedBorderColor = MaterialTheme.colorScheme.primary,
+                    unfocusedBorderColor = MaterialTheme.colorScheme.onBackground,
+                    focusedLabelColor = MaterialTheme.colorScheme.primary
+                )
+            )
+
+            ExposedDropdownMenu(
+                expanded = expanded,
+                onDismissRequest = { expanded = false }
+            ) {
+                options.forEach { option ->
+                    DropdownMenuItem(
+                        text = { Text(option) },
+                        onClick = {
+                            currentValue = option
+                            expanded = false
+                            onSave(option) // Сохраняем выбранное значение
+                        }
+                    )
+                }
+            }
+        }
+
+    }
+}
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun SettingsItem(title: String, value: String, onSave: (String) -> Unit) {
+    var text by remember { mutableStateOf(value) }
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 12.dp)
+    ) {
+        Text(text = title, fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 8.dp))
+        OutlinedTextField(
+            value = text,
+            onValueChange = { text = it },
+            modifier = Modifier.fillMaxWidth(),
+            label = { Text("Enter $title") },
+            shape = RoundedCornerShape(12.dp),
+            colors = TextFieldDefaults.outlinedTextFieldColors(
+                focusedBorderColor = MaterialTheme.colorScheme.primary,
+                unfocusedBorderColor = MaterialTheme.colorScheme.onBackground,
+                focusedLabelColor = MaterialTheme.colorScheme.primary
+            )
+        )
+        Button(
+            onClick = { onSave(text) },
+            modifier = Modifier
+                .padding(top = 16.dp)
+                .fillMaxWidth(),
+            shape = RoundedCornerShape(12.dp),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = Color.Red,
+                contentColor = Color.White
+            )
+        ) {
+            Text("Save")
+        }
     }
 }

@@ -1,6 +1,7 @@
 package com.application.audio_recorder_application.di
 import android.content.Context
 import com.application.audio_recorder_application.data.AudioRecorderRepository
+import com.application.audio_recorder_application.data.SettingsRepository
 import com.application.audio_recorder_application.util.SpeechRecognitionHelper
 import dagger.Module
 import dagger.Provides
@@ -19,6 +20,13 @@ object AppModule {
         @ApplicationContext context: Context
     ): AudioRecorderRepository {
         return AudioRecorderRepository(context)
+    }
+    @Provides
+    @Singleton
+    fun provideSettingsRepository(
+        @ApplicationContext context: Context
+    ): SettingsRepository {
+        return SettingsRepository(context)
     }
 
     @Provides

@@ -111,6 +111,9 @@ dependencies {
     androidTestImplementation("androidx.test.espresso:espresso-core:3.5.1")
     androidTestImplementation("androidx.compose.ui:ui-test-junit4:1.5.2")
     implementation("androidx.compose.material:material:1.5.1") // Укажите последнюю доступную версию
+    implementation ("androidx.datastore:datastore-preferences:1.0.0")
+    implementation ("androidx.compose.material3:material3:1.0.1")
+    implementation ("androidx.compose.ui:ui:1.4.3")
 
 }
 

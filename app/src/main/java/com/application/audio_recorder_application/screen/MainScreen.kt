@@ -1,6 +1,5 @@
 package com.application.audio_recorder_application.screen
 
-import RecorderScreen
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.PlayArrow
