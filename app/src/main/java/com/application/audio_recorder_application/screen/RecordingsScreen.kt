@@ -37,6 +37,12 @@ fun RecordingsScreen(
 
     var showCategoryDialog by remember { mutableStateOf(false) }
     var showSearchBar by remember { mutableStateOf(false) }
+    
+    // Загружаем записи при входе на экран
+    LaunchedEffect(key1 = Unit) {
+        viewModel.loadRecordings()
+        viewModel.loadCategories()
+    }
 
     Scaffold(
         topBar = {

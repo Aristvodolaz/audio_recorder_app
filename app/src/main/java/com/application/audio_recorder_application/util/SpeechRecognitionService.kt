@@ -22,7 +22,9 @@ class SpeechRecognitionService(private val context: Context) {
     }
 
     suspend fun recognizeSpeechFromFile(file: File, language: String = "ru-RU"): String {
-        return withContext(Dispatchers.IO) {
+        // Сначала переключаемся на главный поток
+        return withContext(Dispatchers.Main) {
+            // Затем используем suspendCancellableCoroutine
             suspendCancellableCoroutine { continuation ->
                 try {
                     val recognizerIntent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
@@ -95,7 +97,9 @@ class SpeechRecognitionService(private val context: Context) {
         }
     }
 
-    fun destroy() {
-        speechRecognizer.destroy()
+    suspend fun destroy() {
+        withContext(Dispatchers.Main) {
+            speechRecognizer.destroy()
+        }
     }
 } 

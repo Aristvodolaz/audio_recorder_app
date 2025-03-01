@@ -370,4 +370,75 @@ class RecordingRepository @Inject constructor(
         ENHANCE("enhanced"),
         NORMALIZE("normalized")
     }
+
+    // Метод для сканирования файловой системы и импорта аудиофайлов в базу данных
+    suspend fun scanAndImportRecordings(): Int = withContext(Dispatchers.IO) {
+        var importedCount = 0
+        try {
+            // Получаем директорию с аудиофайлами
+            val directory = context.getExternalFilesDir(Environment.DIRECTORY_MUSIC)
+            
+            // Получаем список всех аудиофайлов в директории
+            val audioFiles = directory?.listFiles { file ->
+                file.isFile && (
+                    file.extension.equals("3gp", ignoreCase = true) ||
+                    file.extension.equals("aac", ignoreCase = true) ||
+                    file.extension.equals("m4a", ignoreCase = true) ||
+                    file.extension.equals("mp4", ignoreCase = true)
+                )
+            } ?: emptyArray()
+            
+            // Получаем список уже существующих записей в базе данных
+            val existingRecordings = recordingDao.getAllRecordingsSync()
+            val existingPaths = existingRecordings.map { it.filePath }
+            
+            // Импортируем только новые файлы
+            for (file in audioFiles) {
+                if (!existingPaths.contains(file.absolutePath)) {
+                    try {
+                        // Создаем новую запись в базе данных
+                        val recording = createRecordingFromFile(file)
+                        recordingDao.insertRecording(recording)
+                        importedCount++
+                        Log.d("RecordingRepository", "Imported recording: ${file.name}")
+                    } catch (e: Exception) {
+                        Log.e("RecordingRepository", "Error importing recording ${file.name}: ${e.message}")
+                    }
+                }
+            }
+            
+            Log.d("RecordingRepository", "Scan completed. Imported $importedCount new recordings")
+        } catch (e: Exception) {
+            Log.e("RecordingRepository", "Error scanning for recordings: ${e.message}")
+            throw e
+        }
+        
+        return@withContext importedCount
+    }
+    
+    // Вспомогательный метод для создания объекта Recording из файла
+    private suspend fun createRecordingFromFile(file: File): Recording {
+        val retriever = MediaMetadataRetriever()
+        retriever.setDataSource(file.absolutePath)
+        
+        val durationMs = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull() ?: 0L
+        val size = file.length()
+        
+        // Генерация данных для визуализации волны
+        val waveformData = audioProcessingService.generateWaveformData(file)
+        
+        return Recording(
+            id = UUID.randomUUID().toString(),
+            fileName = file.name,
+            filePath = file.absolutePath,
+            duration = durationMs,
+            size = size,
+            dateCreated = Date(file.lastModified()),
+            category = "Общее",
+            tags = emptyList(),
+            isEncrypted = false,
+            waveformData = waveformData,
+            format = file.extension
+        )
+    }
 } 

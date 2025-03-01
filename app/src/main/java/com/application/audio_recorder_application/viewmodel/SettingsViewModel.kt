@@ -63,4 +63,27 @@ class SettingsViewModel @Inject constructor(private val repository: SettingsRepo
             repository.saveSetting(key, value)
         }
     }
+    
+    // Метод для применения всех настроек
+    fun applyAllSettings() {
+        viewModelScope.launch {
+            // Применяем настройки аудио
+            repository.applyAudioSettings(
+                audioSource = _audioSource.value,
+                recordingFormat = _recordingFormat.value,
+                sampleRate = _sampleRate.value,
+                bitrate = _bitrate.value
+            )
+            
+            // Применяем настройки хранения
+            repository.applyStorageSettings(
+                recordingsFolder = _recordingsFolder.value
+            )
+            
+            // Применяем настройки интерфейса
+            repository.applyInterfaceSettings(
+                language = _language.value
+            )
+        }
+    }
 }

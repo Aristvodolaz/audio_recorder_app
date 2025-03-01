@@ -35,4 +35,7 @@ interface RecordingDao {
 
     @Query("SELECT * FROM recordings WHERE fileName LIKE '%' || :query || '%' OR transcription LIKE '%' || :query || '%'")
     fun searchRecordings(query: String): Flow<List<Recording>>
+
+    @Query("SELECT * FROM recordings ORDER BY dateCreated DESC")
+    suspend fun getAllRecordingsSync(): List<Recording>
 } 

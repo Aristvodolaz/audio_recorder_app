@@ -26,9 +26,10 @@ object AppModule {
     @Provides
     @Singleton
     fun provideAudioRecorderRepository(
-        @ApplicationContext context: Context
+        @ApplicationContext context: Context,
+        settingsRepository: SettingsRepository
     ): AudioRecorderRepository {
-        return AudioRecorderRepository(context)
+        return AudioRecorderRepository(context, settingsRepository)
     }
 
     @Provides

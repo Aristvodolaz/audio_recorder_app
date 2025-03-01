@@ -17,31 +17,47 @@ import androidx.core.view.WindowCompat
 
 private val DarkColorScheme = darkColorScheme(
     primary = SoundWaveDarkPrimary,
+    onPrimary = SoundWaveDarkBackground,
+    primaryContainer = SoundWaveDarkPrimary.copy(alpha = 0.7f),
+    onPrimaryContainer = SoundWaveDarkBackground,
     secondary = SoundWaveDarkSecondary,
-    tertiary = SoundWaveAccent,
-    background = SoundWaveDarkBackground,
-    surface = SoundWaveDarkSurface,
-    error = SoundWaveDarkError,
-    onPrimary = SoundWaveLightSurface,
     onSecondary = SoundWaveDarkBackground,
+    secondaryContainer = SoundWaveDarkSecondary.copy(alpha = 0.7f),
+    onSecondaryContainer = SoundWaveDarkBackground,
+    tertiary = SoundWaveAccent,
     onTertiary = SoundWaveDarkBackground,
-    onBackground = SoundWaveLightSurface,
-    onSurface = SoundWaveLightSurface,
+    tertiaryContainer = SoundWaveAccent.copy(alpha = 0.7f),
+    onTertiaryContainer = SoundWaveDarkBackground,
+    background = SoundWaveDarkBackground,
+    onBackground = SoundWaveDarkPrimary,
+    surface = SoundWaveDarkSurface,
+    onSurface = SoundWaveDarkPrimary,
+    surfaceVariant = SoundWaveDarkSurface.copy(alpha = 0.7f),
+    onSurfaceVariant = SoundWaveDarkPrimary.copy(alpha = 0.7f),
+    error = SoundWaveDarkError,
     onError = SoundWaveDarkBackground
 )
 
 private val LightColorScheme = lightColorScheme(
     primary = SoundWaveLightPrimary,
-    secondary = SoundWaveLightSecondary,
-    tertiary = SoundWaveAccent,
-    background = SoundWaveLightBackground,
-    surface = SoundWaveLightSurface,
-    error = SoundWaveLightError,
     onPrimary = SoundWaveLightSurface,
-    onSecondary = SoundWaveDarkBackground,
-    onTertiary = SoundWaveDarkBackground,
+    primaryContainer = SoundWaveLightPrimary.copy(alpha = 0.1f),
+    onPrimaryContainer = SoundWaveLightPrimary,
+    secondary = SoundWaveLightSecondary,
+    onSecondary = SoundWaveLightSurface,
+    secondaryContainer = SoundWaveLightSecondary.copy(alpha = 0.1f),
+    onSecondaryContainer = SoundWaveLightSecondary,
+    tertiary = SoundWaveAccent,
+    onTertiary = SoundWaveLightSurface,
+    tertiaryContainer = SoundWaveAccent.copy(alpha = 0.1f),
+    onTertiaryContainer = SoundWaveAccent,
+    background = SoundWaveLightBackground,
     onBackground = SoundWaveDarkBackground,
+    surface = SoundWaveLightSurface,
     onSurface = SoundWaveDarkBackground,
+    surfaceVariant = SoundWaveSurfaceVariant,
+    onSurfaceVariant = SoundWaveOnSurfaceVariant,
+    error = SoundWaveLightError,
     onError = SoundWaveLightSurface
 )
 
@@ -49,7 +65,7 @@ private val LightColorScheme = lightColorScheme(
 fun SoundWaveTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     // Dynamic color is available on Android 12+
-    dynamicColor: Boolean = false, // Отключаем динамические цвета по умолчанию для сохранения брендинга
+    dynamicColor: Boolean = true, // Включаем динамические цвета по умолчанию
     content: @Composable () -> Unit
 ) {
     val colorScheme = when {
@@ -65,8 +81,13 @@ fun SoundWaveTheme(
     if (!view.isInEditMode) {
         SideEffect {
             val window = (view.context as Activity).window
+            // Устанавливаем цвет статус-бара в соответствии с темой
             window.statusBarColor = colorScheme.primary.toArgb()
+            // Устанавливаем светлые или темные иконки в зависимости от темы
             WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = !darkTheme
+            // Устанавливаем цвет навигационной панели
+            window.navigationBarColor = colorScheme.background.toArgb()
+            WindowCompat.getInsetsController(window, view).isAppearanceLightNavigationBars = !darkTheme
         }
     }
 
@@ -82,7 +103,7 @@ fun SoundWaveTheme(
 @Composable
 fun Audio_recorder_applicationTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
-    dynamicColor: Boolean = false,
+    dynamicColor: Boolean = true,
     content: @Composable () -> Unit
 ) {
     SoundWaveTheme(darkTheme, dynamicColor, content)

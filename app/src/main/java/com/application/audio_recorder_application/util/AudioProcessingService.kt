@@ -91,16 +91,49 @@ class AudioProcessingService(private val context: Context) {
     // Генерация данных для визуализации волны
     suspend fun generateWaveformData(inputFile: File): ByteArray? {
         return withContext(Dispatchers.IO) {
-            val tempFile = File(context.cacheDir, "waveform_${System.currentTimeMillis()}.dat")
-            val command = "-i ${inputFile.absolutePath} -ac 1 -filter:a " +
-                    "\"compand,showwavespic=s=640x120:colors=blue\" " +
-                    "-frames:v 1 ${tempFile.absolutePath}"
-            
-            if (executeFFmpegCommand(command) && tempFile.exists()) {
-                val data = tempFile.readBytes()
-                tempFile.delete()
-                data
-            } else {
+            try {
+                // Используем более простой подход - извлекаем амплитуды напрямую
+                val command = "-i ${inputFile.absolutePath} -ac 1 -ar 8000 -f s16le -acodec pcm_s16le -y ${context.cacheDir}/temp_audio.raw"
+                
+                if (executeFFmpegCommand(command)) {
+                    val rawFile = File(context.cacheDir, "temp_audio.raw")
+                    if (rawFile.exists()) {
+                        // Читаем сырые аудиоданные
+                        val rawData = rawFile.readBytes()
+                        
+                        // Создаем массив для хранения амплитуд (максимум 1000 точек)
+                        val maxPoints = 1000
+                        val samplesPerPoint = rawData.size / 2 / maxPoints
+                        val result = ByteArray(maxPoints)
+                        
+                        // Обрабатываем данные для получения амплитуд
+                        for (i in 0 until maxPoints) {
+                            var sum = 0
+                            val startIdx = i * samplesPerPoint * 2
+                            val endIdx = minOf(startIdx + samplesPerPoint * 2, rawData.size)
+                            
+                            for (j in startIdx until endIdx step 2) {
+                                if (j + 1 < rawData.size) {
+                                    // Преобразуем два байта в одно 16-битное значение
+                                    val sample = (rawData[j + 1].toInt() shl 8) or (rawData[j].toInt() and 0xFF)
+                                    sum += Math.abs(sample)
+                                }
+                            }
+                            
+                            // Нормализуем и сохраняем значение
+                            val avg = if (samplesPerPoint > 0) sum / samplesPerPoint else 0
+                            result[i] = (avg / 256).toByte()
+                        }
+                        
+                        // Удаляем временный файл
+                        rawFile.delete()
+                        
+                        return@withContext result
+                    }
+                }
+                null
+            } catch (e: Exception) {
+                Log.e("AudioProcessingService", "Error generating waveform data: ${e.message}")
                 null
             }
         }

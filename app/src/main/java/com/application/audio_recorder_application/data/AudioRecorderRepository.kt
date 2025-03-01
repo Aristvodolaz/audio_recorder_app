@@ -6,15 +6,20 @@ import android.media.MediaRecorder
 import android.os.Build
 import android.os.Environment
 import android.util.Log
+import com.application.audio_recorder_application.data.SettingsRepository.AudioSettings
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import java.io.File
 import javax.inject.Inject
 
-class AudioRecorderRepository @Inject constructor(private val context: Context, ) {
+class AudioRecorderRepository @Inject constructor(
+    private val context: Context,
+    private val settingsRepository: SettingsRepository
+) {
 
     private var mediaRecorder: MediaRecorder? = null
     private var mediaPlayer: MediaPlayer? = null
@@ -33,11 +38,14 @@ class AudioRecorderRepository @Inject constructor(private val context: Context, 
 
     private var isPaused = false
     private var currentFilePath: String? = null
+    
+    // Текущие настройки аудио
+    private var currentAudioSettings: AudioSettings? = null
 
     val isRecording: Boolean
         get() = _isRecordingFlow.value
 
-    fun startRecording(filePath: String) {
+    suspend fun startRecording(filePath: String) {
         if (!checkStorageSpace()) {
             Log.e("AudioRecorderRepository", "Недостаточно места для записи")
             return
@@ -56,13 +64,16 @@ class AudioRecorderRepository @Inject constructor(private val context: Context, 
             // Create directory if it doesn't exist
             val file = File(filePath)
             file.parentFile?.mkdirs()
-
+            
+            // Получаем настройки аудио из SettingsRepository
+            currentAudioSettings = settingsRepository.getAudioSettings()
+            
             mediaRecorder = MediaRecorder().apply {
-                setAudioSource(MediaRecorder.AudioSource.MIC)
-                setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
-                setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
-                setAudioSamplingRate(44100)
-                setAudioEncodingBitRate(192000)
+                setAudioSource(currentAudioSettings?.audioSource ?: MediaRecorder.AudioSource.MIC)
+                setOutputFormat(currentAudioSettings?.outputFormat ?: MediaRecorder.OutputFormat.MPEG_4)
+                setAudioEncoder(currentAudioSettings?.audioEncoder ?: MediaRecorder.AudioEncoder.AAC)
+                setAudioSamplingRate(currentAudioSettings?.sampleRate ?: 44100)
+                setAudioEncodingBitRate(currentAudioSettings?.bitrate ?: 192000)
                 setOutputFile(filePath)
                 prepare()
                 start()
@@ -72,10 +83,29 @@ class AudioRecorderRepository @Inject constructor(private val context: Context, 
             _isPausedFlow.value = false
             currentFilePath = filePath
 
-            Log.d("AudioRecorderRepository", "Recording started with format: MPEG_4, sample rate: 44100Hz, bitrate: 192000bps, file: $filePath")
+            Log.d("AudioRecorderRepository", "Recording started with settings: " +
+                    "format=${getFormatName(currentAudioSettings?.outputFormat)}, " +
+                    "encoder=${getEncoderName(currentAudioSettings?.audioEncoder)}, " +
+                    "sample rate=${currentAudioSettings?.sampleRate}Hz, " +
+                    "bitrate=${currentAudioSettings?.bitrate}bps, " +
+                    "file: $filePath")
         } catch (e: Exception) {
             Log.e("AudioRecorderRepository", "Error starting recording: ${e.message}")
             releaseRecorder()
+        }
+    }
+    
+    // Метод для освобождения ресурсов рекордера
+    private fun releaseRecorder() {
+        try {
+            mediaRecorder?.release()
+        } catch (e: Exception) {
+            Log.e("AudioRecorderRepository", "Error releasing recorder: ${e.message}")
+        } finally {
+            mediaRecorder = null
+            _isRecordingFlow.value = false
+            _isPausedFlow.value = false
+            isPaused = false
         }
     }
 
@@ -84,7 +114,8 @@ class AudioRecorderRepository @Inject constructor(private val context: Context, 
             try {
                 mediaRecorder?.pause()
                 isPaused = true
-                _isRecordingFlow.value = false
+                _isPausedFlow.value = true
+                _isRecordingFlow.value = true
                 Log.d("AudioRecorderRepository", "Recording paused")
             } catch (e: Exception) {
                 e.printStackTrace()
@@ -98,6 +129,7 @@ class AudioRecorderRepository @Inject constructor(private val context: Context, 
             try {
                 mediaRecorder?.resume()
                 isPaused = false
+                _isPausedFlow.value = false
                 _isRecordingFlow.value = true
                 Log.d("AudioRecorderRepository", "Recording resumed")
             } catch (e: Exception) {
@@ -113,19 +145,33 @@ class AudioRecorderRepository @Inject constructor(private val context: Context, 
                 stop()
                 release()
             }
+            mediaRecorder = null
+            _isRecordingFlow.value = false
+            _isPausedFlow.value = false
+            isPaused = false
             Log.d("AudioRecorderRepository", "Recording stopped")
         } catch (e: Exception) {
             e.printStackTrace()
             Log.e("AudioRecorderRepository", "Error stopping recording: ${e.message}")
-        } finally {
             releaseRecorder()
         }
     }
-
-    private fun releaseRecorder() {
-        mediaRecorder = null
-        isPaused = false
-        _isRecordingFlow.value = false
+    
+    // Вспомогательные методы для получения названий форматов и кодеков
+    private fun getFormatName(format: Int?): String {
+        return when (format) {
+            MediaRecorder.OutputFormat.THREE_GPP -> "3GPP"
+            MediaRecorder.OutputFormat.MPEG_4 -> "MPEG_4"
+            else -> "Unknown"
+        }
+    }
+    
+    private fun getEncoderName(encoder: Int?): String {
+        return when (encoder) {
+            MediaRecorder.AudioEncoder.AMR_NB -> "AMR_NB"
+            MediaRecorder.AudioEncoder.AAC -> "AAC"
+            else -> "Unknown"
+        }
     }
 
     fun playRecording(file: File, scope: CoroutineScope) {
@@ -281,6 +327,43 @@ class AudioRecorderRepository @Inject constructor(private val context: Context, 
             }
         } catch (e: Exception) {
             Log.e("AudioRecorderRepository", "Error getting available storage: ${e.message}")
+            0L
+        }
+    }
+
+    // Метод для получения текущей амплитуды записи
+    fun getRecorderAmplitude(): Int {
+        return try {
+            if (_isRecordingFlow.value && !isPaused) {
+                mediaRecorder?.maxAmplitude ?: 0
+            } else {
+                0
+            }
+        } catch (e: Exception) {
+            Log.e("AudioRecorderRepository", "Error getting amplitude: ${e.message}")
+            0
+        }
+    }
+    
+    // Метод для получения директории для записей
+    fun getRecordingsDirectory(): String {
+        val directory = context.getExternalFilesDir(Environment.DIRECTORY_MUSIC)
+        if (directory != null && !directory.exists()) {
+            directory.mkdirs()
+        }
+        Log.d("AudioRecorderRepository", "Recordings directory: ${directory?.absolutePath}")
+        return directory?.absolutePath ?: ""
+    }
+    
+    // Метод для получения размера текущего файла записи
+    fun getCurrentFileSize(): Long {
+        return try {
+            currentFilePath?.let { path ->
+                val file = File(path)
+                if (file.exists()) file.length() else 0L
+            } ?: 0L
+        } catch (e: Exception) {
+            Log.e("AudioRecorderRepository", "Error getting current file size: ${e.message}")
             0L
         }
     }

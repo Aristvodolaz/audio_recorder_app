@@ -4,9 +4,14 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.PlayArrow
@@ -16,10 +21,12 @@ import androidx.compose.material.icons.outlined.Mic
 import androidx.compose.material.icons.outlined.PlayArrow
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.List
+import androidx.compose.material.icons.filled.Waves
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -45,9 +52,8 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import kotlinx.coroutines.delay
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
-import androidx.navigation.compose.composable
-import androidx.navigation.compose.rememberNavController
 
+import androidx.compose.ui.unit.dp
 // Определение навигационных элементов
 sealed class Screen(
     val route: String,
@@ -113,7 +119,7 @@ fun MainContent(navController: NavHostController) {
         ) {
             composable(route = Screen.Recorder.route) {
                 val viewModel: AudioViewModel = hiltViewModel()
-                RecorderScreen(navController = navController)
+                RecorderScreen(navController = navController, viewModel = viewModel)
             }
             composable(route = Screen.Player.route) {
                 val viewModel: AudioViewModel = hiltViewModel()
@@ -138,7 +144,7 @@ fun MainContent(navController: NavHostController) {
                 )
             }
             composable(route = Screen.Settings.route) {
-                SettingsScreen()
+                SettingsScreen(navController = navController)
             }
         }
     }
@@ -147,8 +153,11 @@ fun MainContent(navController: NavHostController) {
 @Composable
 fun BottomNavigationBar(navController: NavController) {
     NavigationBar(
-        containerColor = MaterialTheme.colorScheme.surface,
-        contentColor = MaterialTheme.colorScheme.onSurface
+        containerColor = MaterialTheme.colorScheme.surfaceVariant,
+        contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+        tonalElevation = 8.dp,
+        modifier = Modifier
+            .fillMaxWidth()
     ) {
         val navBackStackEntry by navController.currentBackStackEntryAsState()
         val currentDestination = navBackStackEntry?.destination
@@ -166,10 +175,18 @@ fun BottomNavigationBar(navController: NavController) {
                 label = { 
                     Text(
                         text = screen.title,
-                        fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal
+                        fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
+                        style = MaterialTheme.typography.labelMedium
                     )
                 },
                 selected = selected,
+                colors = NavigationBarItemDefaults.colors(
+                    selectedIconColor = MaterialTheme.colorScheme.primary,
+                    selectedTextColor = MaterialTheme.colorScheme.primary,
+                    indicatorColor = MaterialTheme.colorScheme.primaryContainer,
+                    unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                    unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
+                ),
                 onClick = {
                     navController.navigate(screen.route) {
                         // Избегаем создания нескольких копий одного и того же экрана в стеке
@@ -190,15 +207,40 @@ fun BottomNavigationBar(navController: NavController) {
 @Composable
 fun SplashScreen() {
     Box(
-        modifier = Modifier.fillMaxSize(),
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background),
         contentAlignment = Alignment.Center
     ) {
-        // Здесь можно добавить логотип или анимацию
-        Text(
-            text = "SoundWave",
-            style = MaterialTheme.typography.headlineLarge,
-            color = MaterialTheme.colorScheme.primary,
-            fontWeight = FontWeight.Bold
-        )
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            // Анимированный логотип с морской тематикой
+            Icon(
+                imageVector = Icons.Filled.Waves,
+                contentDescription = "SoundWave Logo",
+                modifier = Modifier
+                    .size(120.dp)
+                    .padding(bottom = 24.dp),
+                tint = MaterialTheme.colorScheme.primary
+            )
+            
+            // Название приложения
+            Text(
+                text = "SoundWave",
+                style = MaterialTheme.typography.headlineLarge,
+                color = MaterialTheme.colorScheme.primary,
+                fontWeight = FontWeight.Bold
+            )
+            
+            // Подзаголовок
+            Text(
+                text = "Запись и воспроизведение аудио",
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f),
+                modifier = Modifier.padding(top = 8.dp)
+            )
+        }
     }
 }

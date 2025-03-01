@@ -2,38 +2,43 @@ package com.application.audio_recorder_application.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-// Основные цвета
-val SoundWavePrimary = Color(0xFF2C6BED)
-val SoundWaveSecondary = Color(0xFF03DAC5)
-val SoundWaveAccent = Color(0xFFFF5722)
+// Основные цвета Material 3 - Морская тематика
+val SoundWavePrimary = Color(0xFF006C84) // Глубокий морской синий
+val SoundWaveSecondary = Color(0xFF4A6572) // Серо-синий
+val SoundWaveAccent = Color(0xFF00ACC1) // Бирюзовый акцент
 
 // Темная тема
-val SoundWaveDarkPrimary = Color(0xFF3D7BFF)
-val SoundWaveDarkSecondary = Color(0xFF00F0D0)
-val SoundWaveDarkBackground = Color(0xFF121212)
-val SoundWaveDarkSurface = Color(0xFF1E1E1E)
-val SoundWaveDarkError = Color(0xFFCF6679)
+val SoundWaveDarkPrimary = Color(0xFF80DEEA) // Светло-бирюзовый для темной темы
+val SoundWaveDarkSecondary = Color(0xFF82B1FF) // Светло-синий вторичный
+val SoundWaveDarkBackground = Color(0xFF102027) // Темно-синий фон
+val SoundWaveDarkSurface = Color(0xFF1D3740) // Темно-синяя поверхность
+val SoundWaveDarkError = Color(0xFFEF9A9A) // Светло-красный для ошибок
 
 // Светлая тема
-val SoundWaveLightPrimary = Color(0xFF1A56D6)
-val SoundWaveLightSecondary = Color(0xFF00C4B0)
-val SoundWaveLightBackground = Color(0xFFF8F9FA)
-val SoundWaveLightSurface = Color(0xFFFFFFFF)
-val SoundWaveLightError = Color(0xFFB00020)
+val SoundWaveLightPrimary = Color(0xFF006C84) // Глубокий морской синий
+val SoundWaveLightSecondary = Color(0xFF4A6572) // Серо-синий
+val SoundWaveLightBackground = Color(0xFFECF8FA) // Светло-голубой фон
+val SoundWaveLightSurface = Color(0xFFFFFFFF) // Белая поверхность
+val SoundWaveLightError = Color(0xFFB71C1C) // Красный для ошибок
 
 // Цвета для визуализации аудио
-val WaveformActive = Color(0xFF2C6BED)
-val WaveformInactive = Color(0xFFABBBE3)
-val WaveformBackground = Color(0xFFF0F4FF)
+val WaveformActive = Color(0xFF00ACC1) // Бирюзовый для активной волны
+val WaveformInactive = Color(0xFFB2EBF2) // Светло-бирюзовый для неактивной волны
+val WaveformBackground = Color(0xFFE0F7FA) // Фон для волны
 
 // Цвета для категорий
-val CategoryBlue = Color(0xFF2196F3)
-val CategoryGreen = Color(0xFF4CAF50)
-val CategoryOrange = Color(0xFFFF9800)
-val CategoryPurple = Color(0xFF9C27B0)
-val CategoryRed = Color(0xFFE91E63)
+val CategoryBlue = Color(0xFF0288D1) // Синий
+val CategoryGreen = Color(0xFF00897B) // Бирюзово-зеленый
+val CategoryOrange = Color(0xFFF57C00) // Оранжевый
+val CategoryPurple = Color(0xFF7B1FA2) // Фиолетовый
+val CategoryRed = Color(0xFFD32F2F) // Красный
 
 // Цвета для статусов
-val StatusRecording = Color(0xFFE53935)
-val StatusPlaying = Color(0xFF43A047)
-val StatusPaused = Color(0xFFFFA000)
+val StatusRecording = Color(0xFFD32F2F) // Красный для записи
+val StatusPlaying = Color(0xFF00897B) // Бирюзово-зеленый для воспроизведения
+val StatusPaused = Color(0xFFFFA000) // Желтый для паузы
+
+// Дополнительные цвета Material 3
+val SoundWaveTertiary = Color(0xFF00ACC1) // Терциарный цвет - бирюзовый
+val SoundWaveSurfaceVariant = Color(0xFFE0F7FA) // Вариант поверхности - светло-бирюзовый
+val SoundWaveOnSurfaceVariant = Color(0xFF263238) // Цвет текста на варианте поверхности

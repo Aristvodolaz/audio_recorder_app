@@ -47,6 +47,8 @@ class RecordingViewModel @Inject constructor(
     init {
         loadRecordings()
         loadCategories()
+        // Сканируем файловую систему при запуске
+        scanFileSystemForRecordings()
     }
 
     fun loadRecordings() {
@@ -316,5 +318,23 @@ class RecordingViewModel @Inject constructor(
     
     fun clearEmotionAnalysisResult() {
         _emotionAnalysisResult.value = null
+    }
+
+    fun scanFileSystemForRecordings() {
+        viewModelScope.launch {
+            _isProcessing.value = true
+            try {
+                val importedCount = recordingRepository.scanAndImportRecordings()
+                if (importedCount > 0) {
+                    _errorMessage.value = "Найдено и импортировано $importedCount новых записей"
+                    // Обновляем список записей после импорта
+                    loadRecordings()
+                }
+            } catch (e: Exception) {
+                _errorMessage.value = "Ошибка при сканировании файлов: ${e.message}"
+            } finally {
+                _isProcessing.value = false
+            }
+        }
     }
 } 
