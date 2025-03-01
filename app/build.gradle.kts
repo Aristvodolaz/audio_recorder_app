@@ -12,7 +12,7 @@ android {
 
     defaultConfig {
         applicationId = "com.application.audio_recorder_application"
-        minSdk = 24
+        minSdk = 25
         targetSdk = 34
         versionCode = 1
         versionName = "1.0"
@@ -103,8 +103,27 @@ dependencies {
     implementation("androidx.navigation:navigation-compose:2.8.3")
 
     // FFmpeg для обработки аудио
-    implementation("com.arthenica:mobile-ffmpeg-full:4.4.LTS")
+    implementation ("com.arthenica:ffmpeg-kit-full:6.0-2")
 
+    // Распознавание речи
+    implementation("com.google.android.gms:play-services-mlkit-text-recognition:19.0.0")
+    implementation("com.google.mlkit:language-id:17.0.4")
+    implementation("com.google.android.gms:play-services-mlkit-language-id:17.0.0")
+    
+    // Шифрование
+    implementation("androidx.security:security-crypto:1.1.0-alpha06")
+    
+    // Визуализация аудио
+    implementation("com.github.massoudss:waveformSeekBar:5.0.2")
+    
+    // Room для хранения данных
+    implementation("androidx.room:room-runtime:2.6.1")
+    implementation("androidx.room:room-ktx:2.6.1")
+    kapt("androidx.room:room-compiler:2.6.1")
+    
+    // Экспорт файлов
+    implementation("androidx.documentfile:documentfile:1.0.1")
+    
     // Тестовые зависимости
     testImplementation("junit:junit:4.13.2")
     androidTestImplementation("androidx.test.ext:junit:1.1.5")
@@ -114,6 +133,7 @@ dependencies {
     implementation ("androidx.datastore:datastore-preferences:1.0.0")
     implementation ("androidx.compose.material3:material3:1.0.1")
     implementation ("androidx.compose.ui:ui:1.4.3")
-
+    implementation("androidx.compose.material3:material3:1.1.0")
+    implementation("com.google.code.gson:gson:2.10.1")
 }
 

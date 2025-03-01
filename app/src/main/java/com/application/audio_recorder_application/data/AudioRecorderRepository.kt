@@ -6,15 +6,20 @@ import android.media.MediaRecorder
 import android.os.Build
 import android.os.Environment
 import android.util.Log
+import com.application.audio_recorder_application.data.SettingsRepository.AudioSettings
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import java.io.File
 import javax.inject.Inject
 
-class AudioRecorderRepository @Inject constructor(private val context: Context, ) {
+class AudioRecorderRepository @Inject constructor(
+    private val context: Context,
+    private val settingsRepository: SettingsRepository
+) {
 
     private var mediaRecorder: MediaRecorder? = null
     private var mediaPlayer: MediaPlayer? = null
@@ -28,35 +33,79 @@ class AudioRecorderRepository @Inject constructor(private val context: Context, 
     private val _currentPlaybackPosition = MutableStateFlow(0)
     val currentPlaybackPosition = _currentPlaybackPosition.asStateFlow()
 
+    private val _isPausedFlow = MutableStateFlow(false)
+    val isPausedFlow = _isPausedFlow.asStateFlow()
+
     private var isPaused = false
+    private var currentFilePath: String? = null
+    
+    // Текущие настройки аудио
+    private var currentAudioSettings: AudioSettings? = null
 
-    fun startRecording(
-        outputFilePath: String,
-        format: Int = MediaRecorder.OutputFormat.THREE_GPP,
-        sampleRate: Int = 16000,
-        bitrate: Int = 128000
-    ) {
-        stopRecording() // Останавливаем любую активную запись перед началом новой
+    val isRecording: Boolean
+        get() = _isRecordingFlow.value
 
+    suspend fun startRecording(filePath: String) {
+        if (!checkStorageSpace()) {
+            Log.e("AudioRecorderRepository", "Недостаточно места для записи")
+            return
+        }
+        
+        // Ensure any existing recording is stopped
+        if (isRecording) {
+            try {
+                stopRecording()
+            } catch (e: Exception) {
+                Log.e("AudioRecorderRepository", "Error stopping previous recording: ${e.message}")
+            }
+        }
+        
         try {
+            // Create directory if it doesn't exist
+            val file = File(filePath)
+            file.parentFile?.mkdirs()
+            
+            // Получаем настройки аудио из SettingsRepository
+            currentAudioSettings = settingsRepository.getAudioSettings()
+            
             mediaRecorder = MediaRecorder().apply {
-                setAudioSource(MediaRecorder.AudioSource.MIC)
-                setOutputFormat(format)
-                setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
-                setAudioSamplingRate(sampleRate)
-                setAudioEncodingBitRate(bitrate)
-                setOutputFile(outputFilePath)
+                setAudioSource(currentAudioSettings?.audioSource ?: MediaRecorder.AudioSource.MIC)
+                setOutputFormat(currentAudioSettings?.outputFormat ?: MediaRecorder.OutputFormat.MPEG_4)
+                setAudioEncoder(currentAudioSettings?.audioEncoder ?: MediaRecorder.AudioEncoder.AAC)
+                setAudioSamplingRate(currentAudioSettings?.sampleRate ?: 44100)
+                setAudioEncodingBitRate(currentAudioSettings?.bitrate ?: 192000)
+                setOutputFile(filePath)
                 prepare()
                 start()
             }
+            
             _isRecordingFlow.value = true
-            isPaused = false
-            Log.d("AudioRecorderRepository", "Recording started: $outputFilePath")
+            _isPausedFlow.value = false
+            currentFilePath = filePath
+
+            Log.d("AudioRecorderRepository", "Recording started with settings: " +
+                    "format=${getFormatName(currentAudioSettings?.outputFormat)}, " +
+                    "encoder=${getEncoderName(currentAudioSettings?.audioEncoder)}, " +
+                    "sample rate=${currentAudioSettings?.sampleRate}Hz, " +
+                    "bitrate=${currentAudioSettings?.bitrate}bps, " +
+                    "file: $filePath")
         } catch (e: Exception) {
-            e.printStackTrace()
-            _isRecordingFlow.value = false
-            releaseRecorder()
             Log.e("AudioRecorderRepository", "Error starting recording: ${e.message}")
+            releaseRecorder()
+        }
+    }
+    
+    // Метод для освобождения ресурсов рекордера
+    private fun releaseRecorder() {
+        try {
+            mediaRecorder?.release()
+        } catch (e: Exception) {
+            Log.e("AudioRecorderRepository", "Error releasing recorder: ${e.message}")
+        } finally {
+            mediaRecorder = null
+            _isRecordingFlow.value = false
+            _isPausedFlow.value = false
+            isPaused = false
         }
     }
 
@@ -65,7 +114,8 @@ class AudioRecorderRepository @Inject constructor(private val context: Context, 
             try {
                 mediaRecorder?.pause()
                 isPaused = true
-                _isRecordingFlow.value = false
+                _isPausedFlow.value = true
+                _isRecordingFlow.value = true
                 Log.d("AudioRecorderRepository", "Recording paused")
             } catch (e: Exception) {
                 e.printStackTrace()
@@ -79,6 +129,7 @@ class AudioRecorderRepository @Inject constructor(private val context: Context, 
             try {
                 mediaRecorder?.resume()
                 isPaused = false
+                _isPausedFlow.value = false
                 _isRecordingFlow.value = true
                 Log.d("AudioRecorderRepository", "Recording resumed")
             } catch (e: Exception) {
@@ -94,19 +145,33 @@ class AudioRecorderRepository @Inject constructor(private val context: Context, 
                 stop()
                 release()
             }
+            mediaRecorder = null
+            _isRecordingFlow.value = false
+            _isPausedFlow.value = false
+            isPaused = false
             Log.d("AudioRecorderRepository", "Recording stopped")
         } catch (e: Exception) {
             e.printStackTrace()
             Log.e("AudioRecorderRepository", "Error stopping recording: ${e.message}")
-        } finally {
             releaseRecorder()
         }
     }
-
-    private fun releaseRecorder() {
-        mediaRecorder = null
-        isPaused = false
-        _isRecordingFlow.value = false
+    
+    // Вспомогательные методы для получения названий форматов и кодеков
+    private fun getFormatName(format: Int?): String {
+        return when (format) {
+            MediaRecorder.OutputFormat.THREE_GPP -> "3GPP"
+            MediaRecorder.OutputFormat.MPEG_4 -> "MPEG_4"
+            else -> "Unknown"
+        }
+    }
+    
+    private fun getEncoderName(encoder: Int?): String {
+        return when (encoder) {
+            MediaRecorder.AudioEncoder.AMR_NB -> "AMR_NB"
+            MediaRecorder.AudioEncoder.AAC -> "AAC"
+            else -> "Unknown"
+        }
     }
 
     fun playRecording(file: File, scope: CoroutineScope) {
@@ -158,6 +223,15 @@ class AudioRecorderRepository @Inject constructor(private val context: Context, 
         }
     }
 
+    fun seekTo(position: Long) {
+        try {
+            mediaPlayer?.seekTo(position.toInt())
+            _currentPlaybackPosition.value = position.toInt()
+            Log.d("AudioRecorderRepository", "Seeked to position: $position ms")
+        } catch (e: Exception) {
+            Log.e("AudioRecorderRepository", "Error seeking: ${e.message}")
+        }
+    }
 
     fun stopPlayback() {
         mediaPlayer?.apply {
@@ -183,8 +257,114 @@ class AudioRecorderRepository @Inject constructor(private val context: Context, 
 
     fun getRecordingsList(): List<File> {
         val directory = context.getExternalFilesDir(Environment.DIRECTORY_MUSIC)
-        val files = directory?.listFiles()?.filter { it.extension == "3gp" || it.extension == "aac" } ?: emptyList()
+        val files = directory?.listFiles()?.filter {
+            it.isFile && (it.extension.equals("3gp", ignoreCase = true) ||
+                    it.extension.equals("aac", ignoreCase = true) ||
+                    it.extension.equals("m4a", ignoreCase = true) ||
+                    it.extension.equals("mp4", ignoreCase = true))
+        }?.sortedByDescending { it.lastModified() } ?: emptyList()
+        
         Log.d("AudioRecorderRepository", "Recordings list retrieved: ${files.size} files")
+        
+        // Выведем список всех найденных файлов для отладки
+        files.forEachIndexed { index, file ->
+            Log.d("AudioRecorderRepository", "Recording $index: ${file.name}, size: ${file.length() / 1024} KB, lastModified: ${java.util.Date(file.lastModified())}")
+        }
+        
         return files
+    }
+
+    fun getCurrentPlaybackPosition(): Long {
+        return try {
+            (mediaPlayer?.currentPosition ?: 0).toLong()
+        } catch (e: Exception) {
+            Log.e("AudioRecorderRepository", "Error getting position: ${e.message}")
+            0L
+        }
+    }
+
+    // Метод для проверки доступного места на устройстве
+    fun checkStorageSpace(): Boolean {
+        val minRequiredSpace = 10 * 1024 * 1024 // 10 МБ минимум
+        
+        val directory = context.getExternalFilesDir(Environment.DIRECTORY_MUSIC)
+        val availableSpace = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            try {
+                val stat = android.os.StatFs(directory?.path)
+                stat.availableBlocksLong * stat.blockSizeLong
+            } catch (e: Exception) {
+                Log.e("AudioRecorderRepository", "Error checking storage space: ${e.message}")
+                0L
+            }
+        } else {
+            try {
+                val stat = android.os.StatFs(directory?.path)
+                @Suppress("DEPRECATION")
+                stat.availableBlocks.toLong() * stat.blockSize.toLong()
+            } catch (e: Exception) {
+                Log.e("AudioRecorderRepository", "Error checking storage space: ${e.message}")
+                0L
+            }
+        }
+        
+        val hasEnoughSpace = availableSpace > minRequiredSpace
+        Log.d("AudioRecorderRepository", "Available storage space: ${availableSpace / (1024 * 1024)} MB, has enough space: $hasEnoughSpace")
+        
+        return hasEnoughSpace
+    }
+
+    // Метод для получения доступного места на устройстве
+    fun getAvailableStorage(): Long {
+        val directory = context.getExternalFilesDir(Environment.DIRECTORY_MUSIC)
+        return try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                val stat = android.os.StatFs(directory?.path)
+                stat.availableBlocksLong * stat.blockSizeLong
+            } else {
+                @Suppress("DEPRECATION")
+                val stat = android.os.StatFs(directory?.path)
+                stat.availableBlocks.toLong() * stat.blockSize.toLong()
+            }
+        } catch (e: Exception) {
+            Log.e("AudioRecorderRepository", "Error getting available storage: ${e.message}")
+            0L
+        }
+    }
+
+    // Метод для получения текущей амплитуды записи
+    fun getRecorderAmplitude(): Int {
+        return try {
+            if (_isRecordingFlow.value && !isPaused) {
+                mediaRecorder?.maxAmplitude ?: 0
+            } else {
+                0
+            }
+        } catch (e: Exception) {
+            Log.e("AudioRecorderRepository", "Error getting amplitude: ${e.message}")
+            0
+        }
+    }
+    
+    // Метод для получения директории для записей
+    fun getRecordingsDirectory(): String {
+        val directory = context.getExternalFilesDir(Environment.DIRECTORY_MUSIC)
+        if (directory != null && !directory.exists()) {
+            directory.mkdirs()
+        }
+        Log.d("AudioRecorderRepository", "Recordings directory: ${directory?.absolutePath}")
+        return directory?.absolutePath ?: ""
+    }
+    
+    // Метод для получения размера текущего файла записи
+    fun getCurrentFileSize(): Long {
+        return try {
+            currentFilePath?.let { path ->
+                val file = File(path)
+                if (file.exists()) file.length() else 0L
+            } ?: 0L
+        } catch (e: Exception) {
+            Log.e("AudioRecorderRepository", "Error getting current file size: ${e.message}")
+            0L
+        }
     }
 }
