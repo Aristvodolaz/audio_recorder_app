@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material3.*
@@ -27,139 +28,236 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.navigation.NavHostController
 import com.application.audio_recorder_application.viewmodel.AudioViewModel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import java.io.File
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun RecorderScreen(viewModel: AudioViewModel = hiltViewModel()) {
-    val context = LocalContext.current
+fun RecorderScreen(
+    navController: NavHostController,
+    viewModel: AudioViewModel = hiltViewModel()
+) {
     val isRecording by viewModel.isRecording.collectAsState()
-    val isPaused by viewModel.isPaused.collectAsState()
     val amplitude by viewModel.amplitude.collectAsState()
-    var seconds by remember { mutableStateOf(0) }
-    val snackbarHostState = remember { SnackbarHostState() }
-    val coroutineScope = rememberCoroutineScope()
-
-    val permissionGranted = remember {
-        mutableStateOf(
-            ContextCompat.checkSelfPermission(
-                context, Manifest.permission.RECORD_AUDIO
-            ) == PackageManager.PERMISSION_GRANTED
-        )
-    }
-
+    val isPaused by viewModel.isPaused.collectAsState()
+    val recordingState by viewModel.recordingState.collectAsState()
+    val snackbarMessage by viewModel.snackbarMessage.collectAsState()
+    val seconds by viewModel.seconds.collectAsState()
+    
+    val context = LocalContext.current
+    val scaffoldState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
+    
+    // Инициализация запроса разрешения на запись аудио
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission(),
-        onResult = { isGranted -> permissionGranted.value = isGranted }
+        onResult = { isGranted ->
+            viewModel.permissionGranted.value = isGranted
+        }
     )
-
-    // Таймер записи
+    
+    // Устанавливаем launcher в ViewModel
+    LaunchedEffect(Unit) {
+        viewModel.permissionLauncher = permissionLauncher
+        
+        // Проверяем текущий статус разрешения
+        viewModel.permissionGranted.value = ContextCompat.checkSelfPermission(
+            context, 
+            Manifest.permission.RECORD_AUDIO
+        ) == PackageManager.PERMISSION_GRANTED
+    }
+    
+    // Состояние для хранения информации о доступном месте
+    var availableStorage by remember { mutableStateOf("") }
+    var currentFileSize by remember { mutableStateOf("") }
+    
+    // Периодическое обновление информации о хранилище
     LaunchedEffect(isRecording) {
-        if (isRecording && !isPaused) {
-            seconds = 0
-            while (isRecording && !isPaused) {
-                delay(1000L)
-                seconds++
+        while (true) {
+            if (isRecording) {
+                // Обновляем информацию о доступном месте
+                val availableBytes = viewModel.getAvailableStorage()
+                availableStorage = formatFileSize(availableBytes)
+                
+                // Если запись идет, обновляем размер текущего файла
+                viewModel.currentFilePath.value?.let { path ->
+                    val file = File(path)
+                    if (file.exists()) {
+                        currentFileSize = formatFileSize(file.length())
+                    }
+                }
             }
+            delay(1000L) // Обновляем каждую секунду
         }
     }
-
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
-    ) {
-        // Таймер
-        Text(
-            text = formatTime(seconds),
-            fontSize = 36.sp,
-            fontWeight = FontWeight.Bold,
-            color = if (isRecording) Color.Red else Color.Gray
-        )
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // Визуализация звука
-        SoundWaveVisualizer(isRecording = isRecording, amplitude = amplitude)
-
-        Spacer(modifier = Modifier.height(24.dp))
-
-        // Кнопки управления записью
-        Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-            IconButton(
-                onClick = {
-                    if (!permissionGranted.value) {
-                        permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
-                    } else {
-                        if (isRecording) {
-                            if (isPaused) {
-                                viewModel.resumeRecording()
-                            } else {
-                                viewModel.pauseRecording()
-                            }
-                        } else {
-                            val outputDir = context.getExternalFilesDir(Environment.DIRECTORY_MUSIC)
-                            val filePath = "${outputDir?.absolutePath}/recording_${System.currentTimeMillis()}.3gp"
-                            viewModel.startRecording(filePath)
-                        }
-                    }
-                },
-                modifier = Modifier
-                    .size(80.dp)
-                    .background(
-                        color = when {
-                            isRecording && isPaused -> Color.Yellow
-                            isRecording -> Color.Gray
-                            else -> Color.Red
-                        },
-                        shape = CircleShape
-                    )
-            ) {
-                Icon(
-                    imageVector = Icons.Filled.Mic,
-                    contentDescription = "Record",
-                    tint = Color.White,
-                    modifier = Modifier.size(40.dp)
-                )
-            }
-
-            IconButton(
-                onClick = {
-                    if (isRecording) {
-                        viewModel.completeRecording()
-                    }
-                },
-                enabled = isRecording,
-                modifier = Modifier
-                    .size(80.dp)
-                    .background(Color.Blue, shape = CircleShape)
-            ) {
-                Icon(
-                    imageVector = Icons.Filled.Check,
-                    contentDescription = "Complete",
-                    tint = Color.White,
-                    modifier = Modifier.size(40.dp)
-                )
-            }
+    
+    // Показываем сообщение, если оно есть
+    LaunchedEffect(snackbarMessage) {
+        snackbarMessage?.let {
+            scaffoldState.showSnackbar(it)
+            // Сбрасываем сообщение после показа
+            viewModel.clearSnackbarMessage()
         }
+    }
+    
+    Scaffold(
+        snackbarHost = { SnackbarHost(hostState = scaffoldState) },
+        topBar = {
+            TopAppBar(
+                title = { Text("Запись аудио") },
+                navigationIcon = {
+                    IconButton(onClick = { navController.navigateUp() }) {
+                        Icon(Icons.Default.ArrowBack, contentDescription = "Назад")
+                    }
+                }
+            )
+        }
+    ) { paddingValues ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(paddingValues)
+                .padding(16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            // Таймер
+            Text(
+                text = formatTime(seconds),
+                fontSize = 36.sp,
+                fontWeight = FontWeight.Bold,
+                color = if (isRecording) Color.Red else Color.Gray
+            )
 
-        Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(16.dp))
 
-        // Дополнительная информация
-        Text(
-            text = "AAC (m4a) 16 kHz 128 kbps Mono",
-            fontSize = 16.sp,
-            color = Color.Gray
-        )
+            // Визуализация звука
+            SoundWaveVisualizer(isRecording = isRecording, amplitude = amplitude)
 
-        Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(24.dp))
 
-        // Snackbar для уведомлений
-        SnackbarHost(hostState = snackbarHostState)
+            // Кнопки управления записью
+            Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                IconButton(
+                    onClick = {
+                        if (!viewModel.permissionGranted.value) {
+                            viewModel.permissionLauncher?.launch(Manifest.permission.RECORD_AUDIO)
+                        } else {
+                            if (isRecording) {
+                                if (isPaused) {
+                                    viewModel.resumeRecording()
+                                    scope.launch {
+                                        scaffoldState.showSnackbar("Запись возобновлена")
+                                    }
+                                } else {
+                                    viewModel.pauseRecording()
+                                    scope.launch {
+                                        scaffoldState.showSnackbar("Запись приостановлена")
+                                    }
+                                }
+                            } else {
+                                val outputDir = context.getExternalFilesDir(Environment.DIRECTORY_MUSIC)
+                                // Создаем директорию, если она не существует
+                                outputDir?.mkdirs()
+                                
+                                // Формируем имя файла с текущей датой и временем
+                                val timestamp = java.text.SimpleDateFormat(
+                                    "yyyyMMdd_HHmmss", 
+                                    java.util.Locale.getDefault()
+                                ).format(java.util.Date())
+                                
+                                // Используем расширение .m4a вместо .3gp
+                                val filePath = "${outputDir?.absolutePath}/REC_${timestamp}.m4a"
+                                viewModel.startRecording(filePath)
+                                
+                                // Показываем сообщение о начале записи
+                                scope.launch {
+                                    scaffoldState.showSnackbar("Запись началась")
+                                }
+                            }
+                        }
+                    },
+                    modifier = Modifier
+                        .size(80.dp)
+                        .background(
+                            color = when {
+                                isRecording && isPaused -> Color.Yellow
+                                isRecording -> Color.Gray
+                                else -> Color.Red
+                            },
+                            shape = CircleShape
+                        )
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.Mic,
+                        contentDescription = "Record",
+                        tint = Color.White,
+                        modifier = Modifier.size(40.dp)
+                    )
+                }
+
+                IconButton(
+                    onClick = {
+                        if (isRecording) {
+                            viewModel.completeRecording()
+                            scope.launch {
+                                scaffoldState.showSnackbar("Запись сохранена")
+                            }
+                        }
+                    },
+                    enabled = isRecording,
+                    modifier = Modifier
+                        .size(80.dp)
+                        .background(Color.Blue, shape = CircleShape)
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.Check,
+                        contentDescription = "Complete",
+                        tint = Color.White,
+                        modifier = Modifier.size(40.dp)
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // Дополнительная информация
+            Text(
+                text = "AAC (m4a) 44.1 kHz 192 kbps Mono",
+                fontSize = 16.sp,
+                color = Color.Gray
+            )
+
+            // Добавляем информацию о доступном месте и размере файла
+            if (isRecording) {
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 8.dp),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp)
+                    ) {
+                        Text(
+                            text = "Текущий размер файла: $currentFileSize",
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "Доступное место: $availableStorage",
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+        }
     }
 }
 
@@ -200,5 +298,15 @@ fun SoundWaveVisualizer(isRecording: Boolean, amplitude: Int) {
                 cap = StrokeCap.Round
             )
         }
+    }
+}
+
+// Функция для форматирования размера в удобочитаемый вид
+fun formatFileSize(bytes: Long): String {
+    return when {
+        bytes < 1024 -> "$bytes B"
+        bytes < 1024 * 1024 -> "${bytes / 1024} KB"
+        bytes < 1024 * 1024 * 1024 -> "${bytes / (1024 * 1024)} MB"
+        else -> "${bytes / (1024 * 1024 * 1024)} GB"
     }
 }

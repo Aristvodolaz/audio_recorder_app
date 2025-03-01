@@ -19,6 +19,15 @@ import javax.inject.Inject
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
+import androidx.activity.result.ActivityResultLauncher
+
+// Перечисление состояний записи
+enum class RecordingState {
+    IDLE,       // Бездействующая (не записывает)
+    RECORDING,  // Идет запись
+    PAUSED      // Запись на паузе
+}
+
 @HiltViewModel
 class AudioViewModel @Inject constructor(private val repository: AudioRecorderRepository) : ViewModel() {
 
@@ -49,6 +58,25 @@ class AudioViewModel @Inject constructor(private val repository: AudioRecorderRe
 
     private val sampleRate = 16000 // Частота дискретизации
 
+    private val _recordingState = MutableStateFlow<RecordingState>(RecordingState.IDLE)
+    val recordingState: StateFlow<RecordingState> get() = _recordingState
+
+    private val _currentFilePath = MutableStateFlow<String?>(null)
+    val currentFilePath: StateFlow<String?> get() = _currentFilePath
+
+    private val _snackbarMessage = MutableStateFlow<String?>("Готово")
+    val snackbarMessage: StateFlow<String?> get() = _snackbarMessage
+
+    // Таймер записи
+    private val _seconds = MutableStateFlow(0)
+    val seconds: StateFlow<Int> get() = _seconds
+    
+    // Состояние разрешения на запись
+    val permissionGranted = MutableStateFlow(false)
+    
+    // Launcher для запроса разрешения - инициализируется в RecorderScreen
+    var permissionLauncher: ActivityResultLauncher<String>? = null
+
     init {
         loadRecordings()
     }
@@ -58,18 +86,26 @@ class AudioViewModel @Inject constructor(private val repository: AudioRecorderRe
         Log.d("AudioViewModel", "Loaded recordings: ${_recordingsList.value.size} files")
     }
 
-    fun startRecording(filePath: String) {
-        audioRecord = AudioRecord(
-            MediaRecorder.AudioSource.MIC,
-            sampleRate,
-            AudioFormat.CHANNEL_IN_MONO,
-            AudioFormat.ENCODING_PCM_16BIT,
-            AudioRecord.getMinBufferSize(sampleRate, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)
-        )
-        audioRecord?.startRecording()
-        _isRecording.value = true
-        updateAmplitude()
-        Log.d("AudioViewModel", "Recording started: $filePath")
+    fun startRecording(outputFilePath: String) {
+        viewModelScope.launch {
+            // Проверка доступного места
+            if (repository.checkStorageSpace()) {
+                repository.startRecording(outputFilePath)
+                
+                // Обновляем состояние
+                _recordingState.value = RecordingState.RECORDING
+                _currentFilePath.value = outputFilePath
+                
+                // Запускаем таймер
+                startTimer()
+                
+                // Информационное сообщение
+                _snackbarMessage.value = "Запись начата"
+            } else {
+                // Показываем сообщение о нехватке места
+                _snackbarMessage.value = "Ошибка: Недостаточно места для записи"
+            }
+        }
     }
 
     private fun updateAmplitude() {
@@ -104,6 +140,14 @@ class AudioViewModel @Inject constructor(private val repository: AudioRecorderRe
         if (_isRecording.value) {
             stopRecording()
             _isRecording.value = false
+            
+            // Обновляем список записей после сохранения новой записи
+            viewModelScope.launch {
+                // Небольшая задержка, чтобы файл успел сохраниться
+                delay(500)
+                loadRecordings()
+            }
+            
             Log.d("AudioViewModel", "Recording completed and saved")
         }
     }
@@ -117,9 +161,22 @@ class AudioViewModel @Inject constructor(private val repository: AudioRecorderRe
     }
 
     fun playRecording(recording: File) {
+        // Останавливаем предыдущее воспроизведение, если оно есть
+        if (_isPlaying.value) {
+            stopPlayback()
+        }
+        
+        // Устанавливаем текущий индекс трека
+        val trackIndex = _recordingsList.value.indexOf(recording)
+        if (trackIndex != -1) {
+            _currentTrackIndex.value = trackIndex
+            Log.d("AudioViewModel", "Playing track #${trackIndex + 1} of ${_recordingsList.value.size}")
+        }
+        
         repository.playRecording(recording, viewModelScope)
         _isPlaying.value = true
         _currentPlaybackDuration.value = getRecordingDuration(recording)
+        _currentPlaybackTime.value = 0L
         startPlaybackTimer()
         Log.d("AudioViewModel", "Playback started: ${recording.absolutePath}")
     }
@@ -135,6 +192,12 @@ class AudioViewModel @Inject constructor(private val repository: AudioRecorderRe
         _isPlaying.value = true
         startPlaybackTimer()
         Log.d("AudioViewModel", "Playback resumed")
+    }
+
+    fun seekTo(position: Long) {
+        repository.seekTo(position)
+        _currentPlaybackTime.value = position
+        Log.d("AudioViewModel", "Seeked to position: $position ms")
     }
 
     fun stopPlayback() {
@@ -164,9 +227,30 @@ class AudioViewModel @Inject constructor(private val repository: AudioRecorderRe
 
     private fun startPlaybackTimer() {
         viewModelScope.launch {
-            while (_isPlaying.value && _currentPlaybackTime.value < _currentPlaybackDuration.value) {
-                delay(1000L)
-                _currentPlaybackTime.value += 1000L
+            _currentPlaybackTime.value = 0L // Сбрасываем время при начале воспроизведения
+            
+            while (_isPlaying.value) {
+                delay(100L) // Обновляем чаще для более плавной визуализации
+                
+                // Получаем актуальное положение из репозитория
+                val currentPosition = repository.getCurrentPlaybackPosition()
+                _currentPlaybackTime.value = currentPosition
+                
+                // Если достигли конца записи, останавливаем воспроизведение
+                if (currentPosition >= _currentPlaybackDuration.value && _currentPlaybackDuration.value > 0) {
+                    _isPlaying.value = false
+                    _currentPlaybackTime.value = 0L
+                    
+                    // Автоматический переход к следующему треку
+                    if (_currentTrackIndex.value < _recordingsList.value.lastIndex) {
+                        delay(500L) // Небольшая пауза между треками
+                        _currentTrackIndex.value++
+                        val nextTrack = _recordingsList.value[_currentTrackIndex.value]
+                        playRecording(nextTrack)
+                    }
+                    
+                    break
+                }
             }
         }
     }
@@ -186,5 +270,26 @@ class AudioViewModel @Inject constructor(private val repository: AudioRecorderRe
         } else {
             Log.w("AudioViewModel", "Failed to delete: file not found - ${file.absolutePath}")
         }
+    }
+
+    // Метод для очистки сообщений
+    fun clearSnackbarMessage() {
+        _snackbarMessage.value = null
+    }
+
+    // Функция для обновления таймера
+    fun startTimer() {
+        viewModelScope.launch {
+            _seconds.value = 0
+            while (isRecording.value && !isPaused.value) {
+                delay(1000L)
+                _seconds.value += 1
+            }
+        }
+    }
+
+    // Метод для получения доступного места на устройстве
+    fun getAvailableStorage(): Long {
+        return repository.getAvailableStorage()
     }
 }

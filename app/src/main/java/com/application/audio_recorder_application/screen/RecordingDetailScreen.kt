@@ -4,6 +4,7 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -25,6 +26,7 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.application.audio_recorder_application.data.RecordingRepository
 import com.application.audio_recorder_application.data.model.Recording
+import com.application.audio_recorder_application.util.EmotionRecognitionService
 import com.application.audio_recorder_application.viewmodel.RecordingViewModel
 import kotlinx.coroutines.launch
 import java.io.File
@@ -488,78 +490,48 @@ fun AdditionalActionsCard(
                 fontWeight = FontWeight.Bold,
                 fontSize = 16.sp
             )
-            
+
             Spacer(modifier = Modifier.height(8.dp))
-            
+
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                ActionChip(
-                    onClick = onTrimClick,
-                    label = { Text("Обрезать") },
-                    leadingIcon = {
-                        Icon(
-                            Icons.Default.ContentCut,
-                            contentDescription = null,
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
+                ActionButton(
+                    icon = Icons.Default.ContentCut,
+                    label = "Обрезать",
+                    onClick = onTrimClick
                 )
-                
-                ActionChip(
-                    onClick = onFormatClick,
-                    label = { Text("Конвертировать") },
-                    leadingIcon = {
-                        Icon(
-                            Icons.Default.Transform,
-                            contentDescription = null,
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
+
+                ActionButton(
+                    icon = Icons.Default.Transform,
+                    label = "Конвертировать",
+                    onClick = onFormatClick
                 )
             }
-            
+
             Spacer(modifier = Modifier.height(8.dp))
-            
+
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                ActionChip(
-                    onClick = onNotesClick,
-                    label = { Text("Заметки") },
-                    leadingIcon = {
-                        Icon(
-                            Icons.Default.Edit,
-                            contentDescription = null,
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
+                ActionButton(
+                    icon = Icons.Default.Edit,
+                    label = "Заметки",
+                    onClick = onNotesClick
                 )
-                
-                ActionChip(
-                    onClick = onCategoryClick,
-                    label = { Text("Категория") },
-                    leadingIcon = {
-                        Icon(
-                            Icons.Default.Category,
-                            contentDescription = null,
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
+
+                ActionButton(
+                    icon = Icons.Default.Category,
+                    label = "Категория",
+                    onClick = onCategoryClick
                 )
-                
-                ActionChip(
-                    onClick = onTagsClick,
-                    label = { Text("Теги") },
-                    leadingIcon = {
-                        Icon(
-                            Icons.Default.Tag,
-                            contentDescription = null,
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
+
+                ActionButton(
+                    icon = Icons.Default.Tag,
+                    label = "Теги",
+                    onClick = onTagsClick
                 )
             }
         }

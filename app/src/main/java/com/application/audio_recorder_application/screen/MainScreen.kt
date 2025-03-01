@@ -35,7 +35,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.navigation.NavController
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
-import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
@@ -44,6 +43,10 @@ import com.application.audio_recorder_application.viewmodel.AudioViewModel
 import com.application.audio_recorder_application.viewmodel.RecordingViewModel
 import androidx.hilt.navigation.compose.hiltViewModel
 import kotlinx.coroutines.delay
+import androidx.navigation.NavHostController
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.rememberNavController
 
 // Определение навигационных элементов
 sealed class Screen(
@@ -64,28 +67,27 @@ private val items = listOf(
     Screen.Recordings,
     Screen.Settings
 )
-
 @Composable
 fun MainScreen() {
     SoundWaveTheme {
         val navController = rememberNavController()
         var showSplash by remember { mutableStateOf(true) }
-        
+
         // Эффект запуска для отображения сплеш-экрана
         LaunchedEffect(key1 = true) {
             delay(1500)
             showSplash = false
         }
-        
+
         Box(modifier = Modifier.fillMaxSize()) {
             AnimatedVisibility(
                 visible = !showSplash,
                 enter = fadeIn(animationSpec = tween(durationMillis = 500)),
                 exit = fadeOut(animationSpec = tween(durationMillis = 500))
             ) {
-                MainContent(navController)
+                MainContent(navController = navController)
             }
-            
+
             AnimatedVisibility(
                 visible = showSplash,
                 enter = fadeIn(animationSpec = tween(durationMillis = 500)),
@@ -98,7 +100,7 @@ fun MainScreen() {
 }
 
 @Composable
-fun MainContent(navController: NavController) {
+fun MainContent(navController: NavHostController) {
     Scaffold(
         bottomBar = {
             BottomNavigationBar(navController)
@@ -109,15 +111,15 @@ fun MainContent(navController: NavController) {
             startDestination = Screen.Recorder.route,
             modifier = Modifier.padding(paddingValues)
         ) {
-            composable(Screen.Recorder.route) {
+            composable(route = Screen.Recorder.route) {
                 val viewModel: AudioViewModel = hiltViewModel()
-                RecorderScreen(viewModel = viewModel)
+                RecorderScreen(navController = navController)
             }
-            composable(Screen.Player.route) {
+            composable(route = Screen.Player.route) {
                 val viewModel: AudioViewModel = hiltViewModel()
                 PlayerScreen(viewModel = viewModel)
             }
-            composable(Screen.Recordings.route) {
+            composable(route = Screen.Recordings.route) {
                 val viewModel: RecordingViewModel = hiltViewModel()
                 RecordingsScreen(
                     viewModel = viewModel,
@@ -126,7 +128,7 @@ fun MainContent(navController: NavController) {
                     }
                 )
             }
-            composable("recording_detail/{recordingId}") { backStackEntry ->
+            composable(route = "recording_detail/{recordingId}") { backStackEntry ->
                 val recordingId = backStackEntry.arguments?.getString("recordingId") ?: ""
                 val viewModel: RecordingViewModel = hiltViewModel()
                 RecordingDetailScreen(
@@ -135,7 +137,7 @@ fun MainContent(navController: NavController) {
                     onBackClick = { navController.popBackStack() }
                 )
             }
-            composable(Screen.Settings.route) {
+            composable(route = Screen.Settings.route) {
                 SettingsScreen()
             }
         }

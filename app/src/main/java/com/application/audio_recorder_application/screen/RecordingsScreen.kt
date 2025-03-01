@@ -257,14 +257,15 @@ fun RecordingItem(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Chip(
-                    onClick = {},
-                    colors = ChipDefaults.chipColors(
-                        containerColor = MaterialTheme.colorScheme.primaryContainer,
-                        labelColor = MaterialTheme.colorScheme.onPrimaryContainer
-                    ),
-                    label = { Text(recording.category) }
-                )
+                Button(
+                    onClick = { /* Действие при нажатии */ },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.primary,
+                        contentColor = MaterialTheme.colorScheme.onPrimary
+                    )
+                ) {
+                    Text(text = recording.category)
+                }
                 
                 Spacer(modifier = Modifier.width(8.dp))
                 
